@@ -10,7 +10,7 @@ on:
 
 env:
   MOD_NAME: FastPlace       # MUST match mod_name in xmake.lua
-  NDK_VERSION: r28c
+  NDK_VERSION: r29
 
 jobs:
   build:
