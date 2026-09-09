@@ -1,0 +1,10 @@
+{
+  "type": "preload-native",
+  "name": "FastPlace",
+  "author": "NexCaise",
+  "version": "1.0.0",
+  "entry": "libFastPlace.so",
+  "minecraft_versions": [],
+  "overwrite_files": [],
+  "overwrite_folders": []
+}

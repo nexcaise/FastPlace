@@ -1,0 +1,97 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  MOD_NAME: FastPlace       # MUST match mod_name in xmake.lua
+  NDK_VERSION: r28c
+
+jobs:
+  build:
+    name: Build (android-arm64-v8a)
+    runs-on: ubuntu-latest
+    outputs:
+      pack_file: ${{ steps.locate.outputs.pack_file }}
+      so_file: ${{ steps.locate.outputs.so_file }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Setup Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+
+      - name: Cache xmake dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.xmake
+            .xmake
+          key: xmake-${{ runner.os }}-${{ hashFiles('xmake.lua') }}
+          restore-keys: |
+            xmake-${{ runner.os }}-
+
+      - name: Ensure zip is available
+        run: |
+          if ! command -v zip >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y zip
+          fi
+
+      - name: Configure
+        run: |
+          xmake f -y -p android -a arm64-v8a -m release --ndk="${{ steps.setup-ndk.outputs.ndk-path }}"
+
+      - name: Build
+        run: xmake -y -v
+
+      - name: Package .levipack
+        id: locate
+        run: bash scripts/package_levipack.sh "$MOD_NAME" build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.MOD_NAME }}-${{ github.sha }}
+          path: |
+            ${{ steps.locate.outputs.so_file }}
+            ${{ steps.locate.outputs.pack_file }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.MOD_NAME }}-${{ github.sha }}
+          path: dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ env.MOD_NAME }} ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
